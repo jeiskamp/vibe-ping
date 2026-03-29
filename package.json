@@ -7,7 +7,7 @@
     "build": "pnpm -r run build",
     "test:backend": "pnpm --filter @vibeping/backend start",
     "test:watcher": "pnpm --filter @vibeping/watcher start",
-    "test:app": "./scripts/test-app.sh",
+    "test:app": "pnpm --filter @vibeping/watcher start",
     "typecheck": "pnpm -r run typecheck"
   },
   "devDependencies": {
