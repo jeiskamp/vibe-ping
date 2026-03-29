@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>VibePing</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="app-shell__glow app-shell__glow--left"></div>
+      <div class="app-shell__glow app-shell__glow--right"></div>
+
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Desktop watcher</p>
+          <h1>VibePing</h1>
+          <p class="hero-copy">
+            Compact local monitor for folders, timeouts, and recent pings.
+          </p>
+        </div>
+
+        <div class="status-card">
+          <span class="status-card__label">Current status</span>
+          <strong id="status-label"></strong>
+          <p id="status-detail"></p>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="panel panel--folders">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Watched folders</p>
+              <h2>Folder list</h2>
+            </div>
+
+            <div class="panel__actions">
+              <button id="add-folder-button" class="button button--primary" type="button">
+                Add
+              </button>
+              <button id="remove-folder-button" class="button button--secondary" type="button">
+                Remove
+              </button>
+            </div>
+          </div>
+
+          <ul id="folder-list" class="folder-list" aria-label="Watched folders"></ul>
+        </section>
+
+        <section class="panel panel--settings">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Controls</p>
+              <h2>Timeout setting</h2>
+            </div>
+          </div>
+
+          <label class="timeout-control" for="timeout-input">
+            <span>Timeout in minutes</span>
+            <input id="timeout-input" type="number" min="1" max="240" />
+          </label>
+
+          <p id="timeout-summary" class="timeout-summary"></p>
+        </section>
+
+        <section class="panel panel--activity">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Recent activity</p>
+              <h2>Latest events</h2>
+            </div>
+          </div>
+
+          <ul id="activity-list" class="activity-list" aria-label="Recent activity"></ul>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span id="runtime-badge"></span>
+      </footer>
+    </div>
+
+    <script type="module" src="../../dist/renderer/renderer.js"></script>
+  </body>
+</html>
