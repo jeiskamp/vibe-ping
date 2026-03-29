@@ -28,7 +28,14 @@ Join the Vibe-Ping Discord community: [discord.gg/KBzRBRXR](https://discord.gg/K
 
 ### Install
 
-Clone the repo, then install its dependencies:
+If you do not already have `pnpm`, install it first with Corepack:
+
+```bash
+corepack enable
+corepack prepare pnpm@10.6.0 --activate
+```
+
+Then clone the repo and install its dependencies:
 
 ```bash
 git clone https://github.com/justincoolio/vibe-ping.git
