@@ -20,28 +20,86 @@ const statusDetail = requireElement<HTMLElement>("#status-detail");
 const folderList = requireElement<HTMLElement>("#folder-list");
 const addFolderButton = requireElement<HTMLButtonElement>("#add-folder-button");
 const removeFolderButton = requireElement<HTMLButtonElement>("#remove-folder-button");
-const timeoutInput = requireElement<HTMLInputElement>("#timeout-input");
-const timeoutSummary = requireElement<HTMLElement>("#timeout-summary");
 const activityList = requireElement<HTMLElement>("#activity-list");
 const runtimeBadge = requireElement<HTMLElement>("#runtime-badge");
 const usernameDisplay = requireElement<HTMLButtonElement>("#username-display");
 const usernameInput = requireElement<HTMLInputElement>("#username-input");
+const webhookInput = requireElement<HTMLInputElement>("#webhook-input");
+const webhookValidationMessage = requireElement<HTMLElement>("#webhook-validation-message");
 const desktopApi = window.vibePingDesktop;
 
 let folders = [...initialFolders];
 let selectedFolderId = folders[0]?.id ?? null;
 let activityItems: ActivityItem[] = [...recentActivity];
-let username = "anonomous0123";
+let username = readStoredValue("vibeping.username", "anonomous0123");
+let webhookUrl = readStoredValue("vibeping.discordWebhook", "");
+const timeoutMinutes = Number(
+  readStoredValue("vibeping.timeoutMinutes", String(initialStatus.timeoutMinutes))
+);
 
 statusLabel.textContent = initialStatus.label;
 statusDetail.textContent = initialStatus.detail;
-timeoutInput.value = String(initialStatus.timeoutMinutes);
 usernameInput.value = username;
 usernameDisplay.textContent = `@${username}`;
+webhookInput.value = webhookUrl;
+
+function readStoredValue(key: string, fallback: string): string {
+  return window.localStorage.getItem(key) ?? fallback;
+}
+
+function writeStoredValue(key: string, value: string): void {
+  window.localStorage.setItem(key, value);
+}
 
 function setStatus(label: string, detail: string): void {
   statusLabel.textContent = label;
   statusDetail.textContent = detail;
+}
+
+function validateDiscordWebhookUrl(value: string): { valid: boolean; message: string } {
+  if (!value) {
+    return {
+      valid: true,
+      message: "Webhook not set. Discord notifications are currently off."
+    };
+  }
+
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(value);
+  } catch {
+    return {
+      valid: false,
+      message: "Enter a full Discord webhook URL."
+    };
+  }
+
+  const validHosts = new Set(["discord.com", "ptb.discord.com", "canary.discord.com"]);
+  const isValidPath = /^\/api\/webhooks\/\d+\/[\w-]+$/u.test(parsedUrl.pathname);
+
+  if (parsedUrl.protocol !== "https:" || !validHosts.has(parsedUrl.host) || !isValidPath) {
+    return {
+      valid: false,
+      message: "That does not look like a valid Discord webhook URL."
+    };
+  }
+
+  return {
+    valid: true,
+    message: "Discord webhook looks valid."
+  };
+}
+
+function renderWebhookValidation(): boolean {
+  const validation = validateDiscordWebhookUrl(webhookInput.value.trim());
+
+  webhookInput.classList.toggle("is-invalid", !validation.valid);
+  webhookInput.setAttribute("aria-invalid", String(!validation.valid));
+  webhookValidationMessage.textContent = validation.message;
+  webhookValidationMessage.classList.toggle("is-invalid", !validation.valid);
+
+  return validation.valid;
 }
 
 function renderFolders(): void {
@@ -108,11 +166,6 @@ function renderFolders(): void {
   removeFolderButton.disabled = folders.length === 0 || selectedFolderId === null;
 }
 
-function renderTimeoutSummary(): void {
-  const minutes = Number(timeoutInput.value) || initialStatus.timeoutMinutes;
-  timeoutSummary.textContent = `Status checks will surface after ${minutes} minute${minutes === 1 ? "" : "s"} of inactivity in this mock preview.`;
-}
-
 function renderActivity(): void {
   activityList.innerHTML = "";
 
@@ -153,8 +206,9 @@ async function refreshActivity(): Promise<void> {
 
   await desktopApi.setFolders(folders.map((folder) => folder.label));
   const snapshot = await desktopApi.getActivity(
-    Number(timeoutInput.value) || initialStatus.timeoutMinutes,
-    username
+    timeoutMinutes,
+    username,
+    webhookUrl
   );
 
   const statusByPath = new Map(snapshot.folders.map((folder) => [folder.path, folder.status]));
@@ -182,9 +236,30 @@ function commitUsername(): void {
   username = normalizeUsername(usernameInput.value);
   usernameInput.value = username;
   usernameDisplay.textContent = `@${username}`;
+  writeStoredValue("vibeping.username", username);
   usernameDisplay.classList.remove("is-hidden");
   usernameInput.classList.add("is-hidden");
   void refreshActivity();
+}
+
+function saveWebhook(): void {
+  const nextWebhookUrl = webhookInput.value.trim();
+  const validation = validateDiscordWebhookUrl(nextWebhookUrl);
+
+  if (!validation.valid) {
+    renderWebhookValidation();
+    setStatus("Invalid webhook URL", validation.message);
+    return;
+  }
+
+  webhookUrl = nextWebhookUrl;
+  writeStoredValue("vibeping.discordWebhook", webhookUrl);
+  setStatus(
+    webhookUrl ? "Discord connected" : initialStatus.label,
+    webhookUrl
+      ? "Discord webhook saved locally for future coding updates."
+      : initialStatus.detail
+  );
 }
 
 async function addSelectedFolders(): Promise<void> {
@@ -247,8 +322,15 @@ addFolderButton.addEventListener("click", () => {
   void addSelectedFolders();
 });
 removeFolderButton.addEventListener("click", removeSelectedFolder);
-timeoutInput.addEventListener("input", renderTimeoutSummary);
-timeoutInput.addEventListener("change", () => {
+webhookInput.addEventListener("change", () => {
+  saveWebhook();
+  void refreshActivity();
+});
+webhookInput.addEventListener("input", () => {
+  renderWebhookValidation();
+});
+webhookInput.addEventListener("blur", () => {
+  saveWebhook();
   void refreshActivity();
 });
 usernameDisplay.addEventListener("click", () => {
@@ -269,6 +351,11 @@ usernameInput.addEventListener("keydown", (event) => {
     usernameInput.classList.add("is-hidden");
   }
 });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    webhookInput.value = webhookUrl;
+  }
+});
 
 if (!desktopApi?.runtime) {
   setStatus(
@@ -279,8 +366,8 @@ if (!desktopApi?.runtime) {
   runtimeBadge.textContent = `Electron ${desktopApi.runtime.electron} • Node ${desktopApi.runtime.node} • ${desktopApi.platform}`;
 }
 
+renderWebhookValidation();
 renderFolders();
-renderTimeoutSummary();
 renderActivity();
 void refreshActivity();
 window.setInterval(() => {

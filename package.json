@@ -5,9 +5,13 @@
   "packageManager": "pnpm@10.6.0",
   "scripts": {
     "build": "pnpm -r run build",
+    "test:backend": "pnpm --filter @vibeping/backend start",
+    "test:watcher": "pnpm --filter @vibeping/watcher start",
+    "test:app": "./scripts/test-app.sh",
     "typecheck": "pnpm -r run typecheck"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
     "typescript": "^5.8.2"
   }
 }

@@ -8,11 +8,18 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.12.0
       typescript:
         specifier: ^5.8.2
         version: 5.9.3
 
-  apps/backend: {}
+  apps/backend:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.12.0
 
   apps/watcher:
     devDependencies:

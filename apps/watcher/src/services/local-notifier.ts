@@ -1,13 +1,14 @@
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { WatchedFolderSnapshot } from "./activity-scanner.js";
 
 let notifierLogPath: string | null = null;
 let terminalOpened = false;
 
-export async function initializeLocalNotifier(userDataPath: string): Promise<void> {
-  const logsDir = path.join(userDataPath, "logs");
+export async function initializeLocalNotifier(): Promise<void> {
+  const logsDir = path.join(tmpdir(), "vibeping");
   notifierLogPath = path.join(logsDir, "presence.log");
 
   await mkdir(logsDir, { recursive: true });
@@ -44,6 +45,10 @@ export async function appendStatusSnapshot(
         });
 
   await appendLogLines(lines);
+}
+
+export async function appendBackendEvent(message: string): Promise<void> {
+  await appendLogLines([message]);
 }
 
 async function appendLogLines(lines: string[]): Promise<void> {

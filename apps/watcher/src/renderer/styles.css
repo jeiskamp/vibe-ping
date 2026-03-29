@@ -215,10 +215,18 @@ h2 {
   margin-bottom: 12px;
 }
 
+.panel__header--stacked {
+  margin-bottom: 10px;
+}
+
 .panel__actions {
   display: flex;
   gap: 8px;
   flex-wrap: nowrap;
+}
+
+.panel__actions--full {
+  margin-top: 10px;
 }
 
 .button {
@@ -358,10 +366,45 @@ h2 {
   color: var(--text);
 }
 
+.timeout-control input.is-invalid {
+  border-color: rgba(255, 144, 120, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 144, 120, 0.18);
+}
+
 .timeout-summary {
   margin: 10px 0 0;
   font-size: 0.8rem;
   line-height: 1.4;
+}
+
+.discord-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.discord-editor {
+  padding: 12px;
+  border: 1px solid rgba(137, 198, 189, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.discord-step__copy {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.webhook-validation-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.webhook-validation-message.is-invalid {
+  color: var(--danger);
 }
 
 .activity-item {

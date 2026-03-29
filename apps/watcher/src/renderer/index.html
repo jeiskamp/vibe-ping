@@ -33,7 +33,7 @@
           <p class="eyebrow">Desktop watcher</p>
           <h1>VibePing</h1>
           <p class="hero-copy">
-            Compact local monitor for folders, timeouts, and recent pings.
+            Compact local monitor for folders, Discord updates, and recent pings.
           </p>
         </div>
 
@@ -66,19 +66,30 @@
         </section>
 
         <section class="panel panel--settings">
-          <div class="panel__header">
+          <div class="panel__header panel__header--stacked">
             <div>
-              <p class="panel__eyebrow">Controls</p>
-              <h2>Timeout setting</h2>
+              <p class="panel__eyebrow">Discord</p>
+              <h2>Connections</h2>
             </div>
           </div>
 
-          <label class="timeout-control" for="timeout-input">
-            <span>Timeout in minutes</span>
-            <input id="timeout-input" type="number" min="1" max="240" />
-          </label>
+          <div id="webhook-editor" class="discord-editor">
+            <p class="discord-step__copy">
+              Paste the Discord webhook URL to send coding updates into your server.
+            </p>
 
-          <p id="timeout-summary" class="timeout-summary"></p>
+            <label class="timeout-control" for="webhook-input">
+              <span>Webhook URL</span>
+              <input
+                id="webhook-input"
+                type="password"
+                placeholder="https://discord.com/api/webhooks/..."
+                autocomplete="off"
+              />
+            </label>
+
+            <p id="webhook-validation-message" class="webhook-validation-message"></p>
+          </div>
         </section>
 
         <section class="panel panel--activity">

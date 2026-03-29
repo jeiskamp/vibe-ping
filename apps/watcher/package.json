@@ -6,7 +6,8 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "pnpm run build && electron dist/main.js",
+    "ensure-electron": "node scripts/ensure-electron.cjs",
+    "start": "pnpm run build && pnpm run ensure-electron && electron dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
