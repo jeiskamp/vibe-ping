@@ -53,6 +53,7 @@ let isQuitting = false;
 let currentConfig: WatcherConfig;
 let presenceStateByPath = new Map<string, PresenceState>();
 let aggregatePresenceState: PresenceState | undefined;
+let announcedActiveFolderPath: string | null = null;
 let presenceEvents: Array<{
   id: string;
   title: string;
@@ -359,8 +360,13 @@ function syncPresenceTracking(): void {
     [...presenceStateByPath.entries()].filter(([folderPath]) => watchedFolderSet.has(folderPath))
   );
 
+  if (announcedActiveFolderPath && !watchedFolderSet.has(announcedActiveFolderPath)) {
+    announcedActiveFolderPath = null;
+  }
+
   if (watchedFolderSet.size === 0) {
     aggregatePresenceState = undefined;
+    announcedActiveFolderPath = null;
   }
 }
 
@@ -405,6 +411,42 @@ function updateDiscordStatus(
   };
 }
 
+function formatActivePresenceMessage(
+  username: string,
+  projectName: string,
+  languageTag?: string | null
+): string {
+  return `${username} is now vibe coding ${projectName}${languageTag ? ` ${languageTag}` : ""}`;
+}
+
+function selectActiveFolder(
+  folders: Array<{
+    path: string;
+    status: "Watching" | "Idle" | "Needs review";
+    lastActivityAt: number | null;
+    languageTag: string | null;
+  }>
+): {
+  path: string;
+  status: "Watching" | "Idle" | "Needs review";
+  lastActivityAt: number | null;
+  languageTag: string | null;
+} | null {
+  let activeFolder: (typeof folders)[number] | null = null;
+
+  for (const folder of folders) {
+    if (folder.status !== "Watching") {
+      continue;
+    }
+
+    if (!activeFolder || (folder.lastActivityAt ?? 0) > (activeFolder.lastActivityAt ?? 0)) {
+      activeFolder = folder;
+    }
+  }
+
+  return activeFolder;
+}
+
 async function deriveSnapshot(snapshot: {
   folders: Array<{
     path: string;
@@ -421,9 +463,11 @@ async function deriveSnapshot(snapshot: {
   }>;
 }): Promise<typeof latestSnapshot> {
   const now = Date.now();
-  let activeProjectName: string | null = null;
-  let activeFolderPath: string | null = null;
-  let activeLanguageTag: string | null = null;
+  const activeFolder = selectActiveFolder(snapshot.folders);
+  const activeProjectName = activeFolder ? path.basename(activeFolder.path) : null;
+  const activeFolderPath = activeFolder?.path ?? null;
+  const activeLanguageTag = activeFolder?.languageTag ?? null;
+  const loggedActivePresencePaths = new Set<string>();
 
   for (const folder of snapshot.folders) {
     const nextPresence = folder.status === "Watching" ? "Currently vibe coding" : "Offline";
@@ -435,18 +479,10 @@ async function deriveSnapshot(snapshot: {
     const shouldNotifyIdle =
       folder.status === "Idle" && previousPresence === "Currently vibe coding";
 
-    if (folder.status === "Watching" && activeProjectName === null) {
-      activeProjectName = folderName;
-      activeFolderPath = folder.path;
-      activeLanguageTag = folder.languageTag;
-    }
-
     if (previousPresence !== undefined && previousPresence !== nextPresence) {
       const message =
         nextPresence === "Currently vibe coding"
-          ? folder.languageTag
-            ? `${currentConfig.username} is vibe coding ${folderName}. ${folder.languageTag}`
-            : `${currentConfig.username} is vibe coding ${folderName}`
+          ? formatActivePresenceMessage(currentConfig.username, folderName, folder.languageTag)
           : `${currentConfig.username} is offline ${folderName}`;
 
       const event = {
@@ -460,6 +496,9 @@ async function deriveSnapshot(snapshot: {
       presenceEvents = [event, ...presenceEvents].slice(0, 12);
       console.log(`[VibePing] ${message}`);
       await appendPresenceEvent(`[presence] ${message}`);
+      if (nextPresence === "Currently vibe coding") {
+        loggedActivePresencePaths.add(folder.path);
+      }
     }
 
     if (shouldNotifyIdle) {
@@ -479,13 +518,12 @@ async function deriveSnapshot(snapshot: {
     }
 
     if (shouldNotifyActive) {
-      activeProjectName = folderName;
-      activeFolderPath = folder.path;
-      activeLanguageTag = folder.languageTag;
-
       if (previousPresence === undefined) {
-        const message = `${currentConfig.username} is vibe coding ${folderName}`;
-        const messageWithLanguage = folder.languageTag ? `${message}. ${folder.languageTag}` : message;
+        const messageWithLanguage = formatActivePresenceMessage(
+          currentConfig.username,
+          folderName,
+          folder.languageTag
+        );
         const event = {
           id: `${folder.path}-${now}-initial-active`,
           title: messageWithLanguage,
@@ -497,6 +535,7 @@ async function deriveSnapshot(snapshot: {
         presenceEvents = [event, ...presenceEvents].slice(0, 12);
         console.log(`[VibePing] ${messageWithLanguage}`);
         await appendPresenceEvent(`[presence] ${messageWithLanguage}`);
+        loggedActivePresencePaths.add(folder.path);
       }
     }
 
@@ -508,12 +547,43 @@ async function deriveSnapshot(snapshot: {
   )
     ? "Currently vibe coding"
     : "Offline";
+  const shouldSendActivePresence =
+    Boolean(activeProjectName) &&
+    nextAggregatePresence === "Currently vibe coding" &&
+    (aggregatePresenceState !== "Currently vibe coding" ||
+      announcedActiveFolderPath !== activeFolderPath);
+  const shouldLogProjectSwitch =
+    Boolean(activeProjectName) &&
+    nextAggregatePresence === "Currently vibe coding" &&
+    aggregatePresenceState === "Currently vibe coding" &&
+    announcedActiveFolderPath !== null &&
+    announcedActiveFolderPath !== activeFolderPath;
 
   if (
+    shouldLogProjectSwitch &&
     activeProjectName &&
-    nextAggregatePresence === "Currently vibe coding" &&
-    aggregatePresenceState !== "Currently vibe coding"
+    activeFolderPath &&
+    !loggedActivePresencePaths.has(activeFolderPath)
   ) {
+    const message = formatActivePresenceMessage(
+      currentConfig.username,
+      activeProjectName,
+      activeLanguageTag
+    );
+    const event = {
+      id: `${activeFolderPath}-${now}-project-switch`,
+      title: message,
+      detail: activeFolderPath,
+      time: "just now",
+      timestamp: now
+    };
+
+    presenceEvents = [event, ...presenceEvents].slice(0, 12);
+    console.log(`[VibePing] ${message}`);
+    await appendPresenceEvent(`[presence] ${message}`);
+  }
+
+  if (shouldSendActivePresence && activeProjectName) {
     await deliverPresenceUpdate({
       username: currentConfig.username,
       projectName: activeProjectName,
@@ -524,6 +594,7 @@ async function deriveSnapshot(snapshot: {
       webhookUrl: currentConfig.webhookUrl || undefined,
       backendUrl: currentConfig.backendUrl || undefined
     });
+    announcedActiveFolderPath = activeFolderPath;
   }
 
   if (
@@ -540,6 +611,7 @@ async function deriveSnapshot(snapshot: {
       webhookUrl: currentConfig.webhookUrl || undefined,
       backendUrl: currentConfig.backendUrl || undefined
     });
+    announcedActiveFolderPath = null;
   }
 
   aggregatePresenceState = nextAggregatePresence;

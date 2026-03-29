@@ -23,7 +23,7 @@ export async function sendDiscordPresenceUpdate(payload: PresenceUpdate): Promis
     webhookUrl: payload.webhookUrl,
     content:
       payload.status === "Currently vibe coding"
-        ? `${payload.username} is vibe coding ${payload.projectName}${payload.languageTag ? `. ${payload.languageTag}` : ""}`
+        ? `${payload.username} is now vibe coding ${payload.projectName}${payload.languageTag ? ` ${payload.languageTag}` : ""}`
         : `${payload.username} offline.`
   });
 }
