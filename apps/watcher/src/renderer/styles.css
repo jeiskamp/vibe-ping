@@ -84,6 +84,42 @@ input {
   margin-bottom: 12px;
 }
 
+.hero__topbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.username-chip,
+.username-input {
+  min-width: 0;
+  max-width: 190px;
+  border-radius: 999px;
+  padding: 0.48rem 0.78rem;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.username-chip {
+  cursor: pointer;
+}
+
+.username-input {
+  outline: none;
+}
+
+.username-input:focus {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 1px rgba(223, 247, 106, 0.22);
+}
+
+.is-hidden {
+  display: none;
+}
+
 .eyebrow,
 .panel__eyebrow {
   margin: 0 0 6px;

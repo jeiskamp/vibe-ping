@@ -10,3 +10,5 @@ export type ActivityItem = {
   detail: string;
   time: string;
 };
+
+export type PresenceState = "Currently vibe coding" | "Offline";

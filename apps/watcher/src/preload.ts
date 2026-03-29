@@ -9,8 +9,8 @@ contextBridge.exposeInMainWorld("vibePingDesktop", {
   },
   selectFolders: () => ipcRenderer.invoke("watcher:select-folders") as Promise<string[]>,
   setFolders: (folders: string[]) => ipcRenderer.invoke("watcher:set-folders", folders) as Promise<void>,
-  getActivity: (timeoutMinutes: number) =>
-    ipcRenderer.invoke("watcher:get-activity", timeoutMinutes) as Promise<{
+  getActivity: (timeoutMinutes: number, username: string) =>
+    ipcRenderer.invoke("watcher:get-activity", timeoutMinutes, username) as Promise<{
       folders: Array<{
         path: string;
         status: "Watching" | "Idle" | "Needs review";

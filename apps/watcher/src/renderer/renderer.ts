@@ -3,7 +3,7 @@ import {
   initialStatus,
   recentActivity
 } from "../config/mock-data.js";
-import type { ActivityItem, FolderItem } from "../types/activity.js";
+import type { ActivityItem, FolderItem, PresenceState } from "../types/activity.js";
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -24,15 +24,20 @@ const timeoutInput = requireElement<HTMLInputElement>("#timeout-input");
 const timeoutSummary = requireElement<HTMLElement>("#timeout-summary");
 const activityList = requireElement<HTMLElement>("#activity-list");
 const runtimeBadge = requireElement<HTMLElement>("#runtime-badge");
+const usernameDisplay = requireElement<HTMLButtonElement>("#username-display");
+const usernameInput = requireElement<HTMLInputElement>("#username-input");
 const desktopApi = window.vibePingDesktop;
 
 let folders = [...initialFolders];
 let selectedFolderId = folders[0]?.id ?? null;
 let activityItems: ActivityItem[] = [...recentActivity];
+let username = "anonomous0123";
 
 statusLabel.textContent = initialStatus.label;
 statusDetail.textContent = initialStatus.detail;
 timeoutInput.value = String(initialStatus.timeoutMinutes);
+usernameInput.value = username;
+usernameDisplay.textContent = `@${username}`;
 
 function setStatus(label: string, detail: string): void {
   statusLabel.textContent = label;
@@ -61,7 +66,9 @@ function renderFolders(): void {
     const badgeGroup = document.createElement("div");
     const statusBadge = document.createElement("span");
     const presenceBadge = document.createElement("span");
-    const isActive = folder.status === "Watching";
+    const presenceState: PresenceState =
+      folder.status === "Watching" ? "Currently vibe coding" : "Offline";
+    const isActive = presenceState === "Currently vibe coding";
 
     button.type = "button";
     button.className = "folder-item";
@@ -87,7 +94,7 @@ function renderFolders(): void {
     statusBadge.textContent = folder.status;
 
     presenceBadge.className = `folder-item__presence ${isActive ? "is-active" : "is-offline"}`;
-    presenceBadge.textContent = isActive ? "Currently vibe coding" : "Offline";
+    presenceBadge.textContent = presenceState;
 
     badgeGroup.className = "folder-item__badges";
     badgeGroup.append(statusBadge, presenceBadge);
@@ -145,7 +152,10 @@ async function refreshActivity(): Promise<void> {
   }
 
   await desktopApi.setFolders(folders.map((folder) => folder.label));
-  const snapshot = await desktopApi.getActivity(Number(timeoutInput.value) || initialStatus.timeoutMinutes);
+  const snapshot = await desktopApi.getActivity(
+    Number(timeoutInput.value) || initialStatus.timeoutMinutes,
+    username
+  );
 
   const statusByPath = new Map(snapshot.folders.map((folder) => [folder.path, folder.status]));
   folders = folders.map((folder) => ({
@@ -156,6 +166,25 @@ async function refreshActivity(): Promise<void> {
 
   renderFolders();
   renderActivity();
+}
+
+function normalizeUsername(value: string): string {
+  const normalized = value
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 24);
+
+  return normalized || "anonomous0123";
+}
+
+function commitUsername(): void {
+  username = normalizeUsername(usernameInput.value);
+  usernameInput.value = username;
+  usernameDisplay.textContent = `@${username}`;
+  usernameDisplay.classList.remove("is-hidden");
+  usernameInput.classList.add("is-hidden");
+  void refreshActivity();
 }
 
 async function addSelectedFolders(): Promise<void> {
@@ -222,6 +251,24 @@ timeoutInput.addEventListener("input", renderTimeoutSummary);
 timeoutInput.addEventListener("change", () => {
   void refreshActivity();
 });
+usernameDisplay.addEventListener("click", () => {
+  usernameDisplay.classList.add("is-hidden");
+  usernameInput.classList.remove("is-hidden");
+  usernameInput.focus();
+  usernameInput.select();
+});
+usernameInput.addEventListener("blur", commitUsername);
+usernameInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    commitUsername();
+  }
+
+  if (event.key === "Escape") {
+    usernameInput.value = username;
+    usernameDisplay.classList.remove("is-hidden");
+    usernameInput.classList.add("is-hidden");
+  }
+});
 
 if (!desktopApi?.runtime) {
   setStatus(
@@ -238,4 +285,4 @@ renderActivity();
 void refreshActivity();
 window.setInterval(() => {
   void refreshActivity();
-}, 15000);
+}, 10000);

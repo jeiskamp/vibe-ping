@@ -13,7 +13,7 @@ declare global {
       };
       selectFolders: () => Promise<string[]>;
       setFolders: (folders: string[]) => Promise<void>;
-      getActivity: (timeoutMinutes: number) => Promise<{
+      getActivity: (timeoutMinutes: number, username: string) => Promise<{
         folders: Array<{
           path: string;
           status: FolderItem["status"];

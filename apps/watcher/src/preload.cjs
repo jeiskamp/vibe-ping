@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld("vibePingDesktop", {
   },
   selectFolders: () => ipcRenderer.invoke("watcher:select-folders"),
   setFolders: (folders) => ipcRenderer.invoke("watcher:set-folders", folders),
-  getActivity: (timeoutMinutes) => ipcRenderer.invoke("watcher:get-activity", timeoutMinutes)
+  getActivity: (timeoutMinutes, username) =>
+    ipcRenderer.invoke("watcher:get-activity", timeoutMinutes, username)
 });
