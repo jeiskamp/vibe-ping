@@ -6,18 +6,6 @@ Point it at one or more project folders, let it run in the background, and it wi
 
 This repo is aimed at developers first: clone it, run it locally, connect a Discord webhook, and start experimenting.
 
-## Why It Exists
-
-Most presence tools are built around chat apps, game launchers, or giant collaboration suites.
-
-Vibe-Ping is intentionally narrower:
-
-- desktop-first
-- Discord-focused
-- low-friction
-- background-friendly
-- built for developers who just want lightweight “I’m coding right now” signals
-
 ## What It Does
 
 - watches local project folders for recent file activity
@@ -99,35 +87,6 @@ If activity stays quiet past the configured threshold, it reports `Offline`.
 
 The monitoring loop lives in Electron’s main process, so the app can keep running even after the window is closed.
 
-## Current Scope
-
-This is a GitHub-first developer release, not a polished packaged consumer app yet.
-
-What is solid today:
-
-- local folder monitoring
-- Discord webhook delivery
-- background app behavior
-- tray-based lifecycle
-- editable idle threshold
-- launch-at-login controls
-
-What is still intentionally simple:
-
-- file activity uses scan-based detection, not native OS file watching
-- distribution is still repo-first
-
-## Repo Layout
-
-```text
-apps/
-  watcher/   Electron app for monitoring + Discord delivery
-  backend/   Legacy prototype code
-packages/
-  shared/    Shared types
-docs/
-  v1-github-release-checklist.md
-```
 
 ## Notes
 

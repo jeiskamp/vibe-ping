@@ -453,11 +453,33 @@ h2 {
   color: var(--muted);
 }
 
-.discord-step__copy {
-  margin: 0;
+.discord-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+}
+
+.discord-help-button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(137, 198, 189, 0.26);
+  border-radius: 999px;
+  background: rgba(7, 16, 23, 0.5);
   color: var(--text);
-  font-size: 0.8rem;
-  line-height: 1.45;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  font-style: normal;
+  text-transform: none;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.discord-help-button:hover,
+.discord-help-button:focus-visible {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 1px rgba(223, 247, 106, 0.18);
+  outline: none;
 }
 
 .discord-actions {
@@ -497,15 +519,56 @@ h2 {
   line-height: 1.45;
 }
 
-.webhook-validation-message {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.76rem;
-  line-height: 1.4;
+.discord-help-dialog {
+  width: min(420px, calc(100vw - 32px));
+  border: 1px solid rgba(137, 198, 189, 0.22);
+  border-radius: 18px;
+  padding: 0;
+  background: #081018;
+  color: var(--text);
 }
 
-.webhook-validation-message.is-invalid {
-  color: var(--danger);
+.discord-help-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.discord-help-dialog__content {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.discord-help-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.discord-help-dialog__header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.discord-help-dialog__close {
+  border: 1px solid rgba(137, 198, 189, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.discord-help-dialog__steps {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.discord-help-dialog__steps li + li {
+  margin-top: 0.35rem;
 }
 
 .activity-item {

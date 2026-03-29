@@ -26,8 +26,11 @@ const runtimeBadge = requireElement<HTMLElement>("#runtime-badge");
 const usernameDisplay = requireElement<HTMLButtonElement>("#username-display");
 const usernameInput = requireElement<HTMLInputElement>("#username-input");
 const webhookInput = requireElement<HTMLInputElement>("#webhook-input");
+const webhookHelpButton = requireElement<HTMLButtonElement>("#webhook-help-button");
+const webhookHelpDialog = requireElement<HTMLDialogElement>("#webhook-help-dialog");
+const webhookHelpCloseButton = requireElement<HTMLButtonElement>("#webhook-help-close-button");
+const officialServerButton = requireElement<HTMLButtonElement>("#official-server-button");
 const testWebhookButton = requireElement<HTMLButtonElement>("#test-webhook-button");
-const webhookValidationMessage = requireElement<HTMLElement>("#webhook-validation-message");
 const discordStatusMessage = requireElement<HTMLElement>("#discord-status-message");
 const discordStatusMeta = requireElement<HTMLElement>("#discord-status-meta");
 const keepRunningCheckbox = requireElement<HTMLInputElement>("#keep-running-checkbox");
@@ -41,6 +44,12 @@ let activityItems: ActivityItem[] = [...recentActivity];
 let config: WatcherConfig = { ...DEFAULT_WATCHER_CONFIG };
 let folders: FolderItem[] = [];
 let selectedFolderId: string | null = null;
+let officialServerAvailable = false;
+let officialServerUrl = "";
+
+function hasDeliveryTarget(nextConfig: WatcherConfig): boolean {
+  return Boolean(nextConfig.backendUrl.trim() || nextConfig.webhookUrl.trim());
+}
 
 function createFolderId(folderPath: string): string {
   return `folder-${folderPath}`;
@@ -65,7 +74,9 @@ function validateDiscordWebhookUrl(value: string): { valid: boolean; message: st
   if (!value) {
     return {
       valid: true,
-      message: "Webhook not set. Discord notifications are currently off."
+      message: hasDeliveryTarget(config)
+        ? "Using the shared VibePing server for delivery."
+        : "Webhook not set. Discord notifications are currently off."
     };
   }
 
@@ -101,10 +112,20 @@ function renderWebhookValidation(): boolean {
 
   webhookInput.classList.toggle("is-invalid", !validation.valid);
   webhookInput.setAttribute("aria-invalid", String(!validation.valid));
-  webhookValidationMessage.textContent = validation.message;
-  webhookValidationMessage.classList.toggle("is-invalid", !validation.valid);
 
   return validation.valid;
+}
+
+function openWebhookHelpDialog(): void {
+  if (!webhookHelpDialog.open) {
+    webhookHelpDialog.showModal();
+  }
+}
+
+function closeWebhookHelpDialog(): void {
+  if (webhookHelpDialog.open) {
+    webhookHelpDialog.close();
+  }
 }
 
 function formatTimestamp(value: string | null): string {
@@ -133,7 +154,7 @@ function renderDiscordStatus(discord: {
   discordStatusMessage.classList.toggle("is-error", discord.status === "error");
 
   if (!discord.configured) {
-    discordStatusMeta.textContent = "Add a webhook URL to test your connection.";
+    discordStatusMeta.textContent = "Add a webhook URL or configure a backend server to test delivery.";
     return;
   }
 
@@ -154,7 +175,7 @@ function applyConfigToInputs(): void {
   startHiddenCheckbox.disabled = !config.openAtLogin;
   timeoutInput.value = String(config.timeoutMinutes);
   timeoutValue.textContent = `${config.timeoutMinutes} min`;
-  testWebhookButton.disabled = !config.webhookUrl.trim();
+  testWebhookButton.disabled = !hasDeliveryTarget(config);
 }
 
 function normalizeTimeoutMinutes(value: string): number {
@@ -390,7 +411,38 @@ async function testDiscordConnection(): Promise<void> {
     await refreshState();
   } finally {
     testWebhookButton.textContent = "Test connection";
-    testWebhookButton.disabled = !config.webhookUrl.trim();
+    testWebhookButton.disabled = !hasDeliveryTarget(config);
+  }
+}
+
+async function connectToOfficialServer(): Promise<void> {
+  if (!desktopApi?.openOfficialServer) {
+    return;
+  }
+
+  officialServerButton.disabled = true;
+
+  try {
+    let result = await desktopApi.openOfficialServer();
+
+    if (!result.opened && officialServerUrl) {
+      const popup = window.open(officialServerUrl, "_blank", "noopener,noreferrer");
+      result = popup
+        ? { opened: true }
+        : result;
+    }
+
+    if (result.opened) {
+      setStatus(
+        "Discord invite opened",
+        "Finish joining the official Vibe-Ping Discord in Discord or your browser."
+      );
+      return;
+    }
+
+    setStatus("Official server unavailable", result.reason ?? "Invite could not be opened.");
+  } finally {
+    officialServerButton.disabled = !officialServerAvailable;
   }
 }
 
@@ -462,6 +514,13 @@ async function bootstrap(): Promise<void> {
   }
 
   runtimeBadge.textContent = `Electron ${desktopApi.runtime.electron} • Node ${desktopApi.runtime.node} • ${desktopApi.platform}`;
+  if (desktopApi.getOfficialServer) {
+    const officialServer = await desktopApi.getOfficialServer();
+    officialServerAvailable = officialServer.available;
+    officialServerUrl = officialServer.url;
+    officialServerButton.textContent = officialServer.label;
+    officialServerButton.disabled = !officialServerAvailable;
+  }
   config = await desktopApi.getConfig();
   syncFolderList();
   applyConfigToInputs();
@@ -480,13 +539,30 @@ webhookInput.addEventListener("change", () => {
 });
 webhookInput.addEventListener("input", () => {
   renderWebhookValidation();
-  testWebhookButton.disabled = !webhookInput.value.trim();
+  testWebhookButton.disabled = !Boolean(config.backendUrl.trim() || webhookInput.value.trim());
 });
 webhookInput.addEventListener("blur", () => {
   saveWebhook();
 });
 testWebhookButton.addEventListener("click", () => {
   void testDiscordConnection();
+});
+webhookHelpButton.addEventListener("click", openWebhookHelpDialog);
+webhookHelpCloseButton.addEventListener("click", closeWebhookHelpDialog);
+webhookHelpDialog.addEventListener("click", (event) => {
+  const bounds = webhookHelpDialog.getBoundingClientRect();
+  const clickedOutside =
+    event.clientX < bounds.left ||
+    event.clientX > bounds.right ||
+    event.clientY < bounds.top ||
+    event.clientY > bounds.bottom;
+
+  if (clickedOutside) {
+    closeWebhookHelpDialog();
+  }
+});
+officialServerButton.addEventListener("click", () => {
+  void connectToOfficialServer();
 });
 keepRunningCheckbox.addEventListener("change", () => {
   void persistConfig({
@@ -528,7 +604,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     webhookInput.value = config.webhookUrl;
     timeoutInput.value = String(config.timeoutMinutes);
-    testWebhookButton.disabled = !config.webhookUrl.trim();
+    testWebhookButton.disabled = !hasDeliveryTarget(config);
   }
 });
 

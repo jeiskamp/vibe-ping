@@ -10,6 +10,17 @@ contextBridge.exposeInMainWorld("vibePingDesktop", {
   },
   selectFolders: () => ipcRenderer.invoke("watcher:select-folders") as Promise<string[]>,
   getConfig: () => ipcRenderer.invoke("watcher:get-config") as Promise<WatcherConfig>,
+  getOfficialServer: () =>
+    ipcRenderer.invoke("watcher:get-official-server") as Promise<{
+      available: boolean;
+      label: string;
+      url: string;
+    }>,
+  openOfficialServer: () =>
+    ipcRenderer.invoke("watcher:open-official-server") as Promise<{
+      opened: boolean;
+      reason?: string;
+    }>,
   updateConfig: (nextConfig: Partial<WatcherConfig>) =>
     ipcRenderer.invoke("watcher:update-config", nextConfig) as Promise<WatcherConfig>,
   testDiscordConnection: () =>

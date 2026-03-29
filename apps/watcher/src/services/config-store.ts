@@ -10,12 +10,23 @@ function getConfigPath(): string {
   return path.join(app.getPath("userData"), "watcher-config.json");
 }
 
+function getLegacyConfigPath(): string {
+  return path.join(app.getPath("appData"), "Electron", "watcher-config.json");
+}
+
 export async function loadWatcherConfig(): Promise<WatcherConfig> {
   try {
     const raw = await readFile(getConfigPath(), "utf8");
     return normalizeWatcherConfig(JSON.parse(raw));
   } catch {
-    return { ...DEFAULT_WATCHER_CONFIG };
+    try {
+      const raw = await readFile(getLegacyConfigPath(), "utf8");
+      const migratedConfig = normalizeWatcherConfig(JSON.parse(raw));
+      await saveWatcherConfig(migratedConfig);
+      return migratedConfig;
+    } catch {
+      return { ...DEFAULT_WATCHER_CONFIG };
+    }
   }
 }
 
@@ -27,12 +38,17 @@ export async function saveWatcherConfig(config: WatcherConfig): Promise<void> {
 
 export function normalizeWatcherConfig(value: unknown): WatcherConfig {
   const candidate = (value ?? {}) as Partial<WatcherConfig>;
+  const defaultBackendUrl = process.env.VIBEPING_BACKEND_URL?.trim() ?? "";
 
   return {
     username:
       typeof candidate.username === "string" && candidate.username.trim()
         ? candidate.username.trim()
         : DEFAULT_WATCHER_CONFIG.username,
+    backendUrl:
+      typeof candidate.backendUrl === "string" && candidate.backendUrl.trim()
+        ? candidate.backendUrl.trim()
+        : defaultBackendUrl,
     webhookUrl: typeof candidate.webhookUrl === "string" ? candidate.webhookUrl.trim() : "",
     watchedFolders: Array.isArray(candidate.watchedFolders)
       ? candidate.watchedFolders.filter((entry): entry is string => typeof entry === "string")

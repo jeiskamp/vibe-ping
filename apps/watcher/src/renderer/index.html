@@ -64,18 +64,23 @@
         <section class="panel panel--discord">
           <div class="panel__header panel__header--stacked">
             <div>
-              <p class="panel__eyebrow">Discord webhook connection</p>
-              <h2>Discord connection</h2>
+              <p class="panel__eyebrow">Discord Connection</p>
             </div>
           </div>
 
           <div id="webhook-editor" class="discord-editor">
-            <p class="discord-step__copy">
-              This connection powers the core product experience. Add your Discord webhook so VibePing can post coding status updates to your server.
-            </p>
-
             <label class="timeout-control" for="webhook-input">
-              <span>Webhook URL</span>
+              <span class="discord-label-row">
+                <span>Custom Webhook URL</span>
+                <button
+                  id="webhook-help-button"
+                  class="discord-help-button"
+                  type="button"
+                  aria-label="How to find your Discord webhook URL"
+                >
+                  i
+                </button>
+              </span>
               <input
                 id="webhook-input"
                 type="password"
@@ -90,17 +95,43 @@
               </button>
             </div>
 
-            <p id="webhook-validation-message" class="webhook-validation-message"></p>
-
             <div class="discord-status-card" aria-live="polite">
               <p id="discord-status-message" class="discord-status-card__message">
-                Discord webhook not configured yet.
+                Discord delivery is not configured yet.
               </p>
               <p id="discord-status-meta" class="discord-status-card__meta">
-                Add a webhook URL to test your connection.
+                Add a webhook URL or configure a backend server to test delivery.
               </p>
             </div>
+
+            <div class="discord-actions">
+              <button id="official-server-button" class="button button--secondary" type="button">
+                Connect to Official Vibe-Ping Server
+              </button>
+            </div>
           </div>
+
+          <dialog id="webhook-help-dialog" class="discord-help-dialog" aria-labelledby="webhook-help-title">
+            <div class="discord-help-dialog__content">
+              <div class="discord-help-dialog__header">
+                <h3 id="webhook-help-title">Find your Discord webhook URL</h3>
+                <button
+                  id="webhook-help-close-button"
+                  class="discord-help-dialog__close"
+                  type="button"
+                  aria-label="Close webhook help"
+                >
+                  Close
+                </button>
+              </div>
+              <ol class="discord-help-dialog__steps">
+                <li>Open Discord and go to the server and channel where you want VibePing updates to appear.</li>
+                <li>Open <strong>Edit Channel</strong>, then <strong>Integrations</strong>, then <strong>Webhooks</strong>.</li>
+                <li>Create a webhook or choose an existing one, then click <strong>Copy Webhook URL</strong>.</li>
+                <li>Paste that URL into VibePing and use <strong>Test connection</strong> when you are ready.</li>
+              </ol>
+            </div>
+          </dialog>
         </section>
 
         <section class="panel panel--settings">

@@ -14,6 +14,15 @@ declare global {
       };
       selectFolders: () => Promise<string[]>;
       getConfig: () => Promise<WatcherConfig>;
+      getOfficialServer: () => Promise<{
+        available: boolean;
+        label: string;
+        url: string;
+      }>;
+      openOfficialServer: () => Promise<{
+        opened: boolean;
+        reason?: string;
+      }>;
       updateConfig: (nextConfig: Partial<WatcherConfig>) => Promise<WatcherConfig>;
       testDiscordConnection: () => Promise<{
         delivered: boolean;

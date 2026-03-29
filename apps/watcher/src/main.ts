@@ -7,6 +7,7 @@ import {
   dialog,
   ipcMain,
   nativeImage,
+  shell,
   type OpenDialogOptions
 } from "electron";
 import path from "node:path";
@@ -22,6 +23,7 @@ import {
   sendDiscordWebhookMessage,
   type DiscordDeliveryResult
 } from "./services/discord-webhook.js";
+import { sendPresenceToBackend } from "./services/presence-backend.js";
 import {
   appendBackendEvent,
   appendPresenceEvent,
@@ -34,9 +36,15 @@ import type { PresenceState } from "./types/activity.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const shouldOpenNotifierTerminal = process.env.VIBEPING_OPEN_NOTIFIER_TERMINAL === "1";
+const defaultOfficialDiscordInviteUrl = "https://discord.gg/KBzRBRXR";
+const officialDiscordInviteUrl =
+  process.env.VIBEPING_OFFICIAL_DISCORD_INVITE_URL?.trim() || defaultOfficialDiscordInviteUrl;
 const watcherIntervalMs = 10_000;
 const minimumTimeoutMinutes = 5;
 const maximumTimeoutMinutes = 240;
+
+app.setName("VibePing");
+app.setPath("userData", path.join(app.getPath("appData"), "VibePing"));
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -78,7 +86,7 @@ let latestSnapshot: {
   discord: {
     configured: false,
     status: "unknown",
-    message: "Discord webhook not configured yet.",
+    message: "Discord delivery is not configured yet.",
     checkedAt: null,
     lastDeliveredAt: null
   },
@@ -127,17 +135,51 @@ ipcMain.handle("watcher:update-config", async (_event, nextConfig: Partial<Watch
 
 ipcMain.handle("watcher:get-state", async () => latestSnapshot);
 
+ipcMain.handle("watcher:get-official-server", async () => ({
+  available: Boolean(officialDiscordInviteUrl),
+  label: "Connect to Official Vibe-Ping Server",
+  url: officialDiscordInviteUrl
+}));
+
+ipcMain.handle("watcher:open-official-server", async () => {
+  if (!officialDiscordInviteUrl) {
+    return {
+      opened: false,
+      reason: "Official Vibe-Ping server invite is not configured yet."
+    };
+  }
+
+  await shell.openExternal(officialDiscordInviteUrl, {
+    activate: true
+  });
+
+  return {
+    opened: true
+  };
+});
+
 ipcMain.handle("watcher:test-discord-connection", async () => {
   const checkedAt = new Date().toISOString();
-  const result = await sendDiscordWebhookMessage({
-    webhookUrl: currentConfig.webhookUrl || undefined,
-    content: `VibePing test message from @${currentConfig.username}. Discord connection looks good.`
-  });
+  const result = currentConfig.backendUrl
+    ? await sendPresenceToBackend({
+        username: currentConfig.username,
+        projectName: "VibePing",
+        folderPath: "connection-test",
+        status: "Currently vibe coding",
+        timestamp: checkedAt,
+        languageTag: "Connection test",
+        webhookUrl: currentConfig.webhookUrl || undefined,
+        backendUrl: currentConfig.backendUrl
+      })
+    : await sendDiscordWebhookMessage({
+        webhookUrl: currentConfig.webhookUrl || undefined,
+        content: `VibePing test message from @${currentConfig.username}. Discord connection looks good.`
+      });
 
   updateDiscordStatus(result, {
     checkedAt,
-    successMessage: "Test message delivered to Discord.",
-    errorPrefix: "Discord test failed"
+    successMessage: "Test message delivered.",
+    errorPrefix: "Presence test failed"
   });
 
   return {
@@ -150,7 +192,7 @@ ipcMain.handle("watcher:test-discord-connection", async () => {
 const singleInstanceLock = app.requestSingleInstanceLock();
 
 if (!singleInstanceLock) {
-  app.quit();
+  app.exit(0);
 }
 
 app.on("second-instance", () => {
@@ -167,7 +209,7 @@ function createMainWindow(showOnCreate = true): BrowserWindow {
     title: "VibePing",
     show: showOnCreate,
     webPreferences: {
-      preload: path.join(__dirname, "../src/preload.cjs"),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -334,12 +376,12 @@ async function refreshWatcherState(): Promise<void> {
 }
 
 function updateConfiguredDiscordState(): void {
-  const configured = Boolean(currentConfig.webhookUrl.trim());
+  const configured = Boolean(currentConfig.backendUrl.trim() || currentConfig.webhookUrl.trim());
   latestSnapshot.discord = {
     ...latestSnapshot.discord,
     configured,
     status: configured ? latestSnapshot.discord.status : "unknown",
-    message: configured ? latestSnapshot.discord.message : "Discord webhook not configured yet.",
+    message: configured ? latestSnapshot.discord.message : "Discord delivery is not configured yet.",
     checkedAt: configured ? latestSnapshot.discord.checkedAt : null
   };
 }
@@ -353,7 +395,7 @@ function updateDiscordStatus(
   }
 ): void {
   latestSnapshot.discord = {
-    configured: Boolean(currentConfig.webhookUrl.trim()),
+    configured: Boolean(currentConfig.backendUrl.trim() || currentConfig.webhookUrl.trim()),
     status: result.delivered ? "success" : "error",
     message: result.delivered
       ? options.successMessage
@@ -479,7 +521,8 @@ async function deriveSnapshot(snapshot: {
       status: nextAggregatePresence,
       timestamp: new Date(now).toISOString(),
       languageTag: activeLanguageTag ?? undefined,
-      webhookUrl: currentConfig.webhookUrl || undefined
+      webhookUrl: currentConfig.webhookUrl || undefined,
+      backendUrl: currentConfig.backendUrl || undefined
     });
   }
 
@@ -494,7 +537,8 @@ async function deriveSnapshot(snapshot: {
       folderPath: currentConfig.watchedFolders[0] ?? "",
       status: nextAggregatePresence,
       timestamp: new Date(now).toISOString(),
-      webhookUrl: currentConfig.webhookUrl || undefined
+      webhookUrl: currentConfig.webhookUrl || undefined,
+      backendUrl: currentConfig.backendUrl || undefined
     });
   }
 
@@ -518,26 +562,30 @@ async function deliverPresenceUpdate(payload: {
   timestamp: string;
   languageTag?: string;
   webhookUrl?: string;
+  backendUrl?: string;
 }): Promise<void> {
-  const sendingMessage = `[discord] sending ${payload.username} ${payload.status} ${payload.projectName}`;
+  const deliveryTarget = payload.backendUrl ? "backend" : "discord";
+  const sendingMessage = `[${deliveryTarget}] sending ${payload.username} ${payload.status} ${payload.projectName}`;
   console.log(sendingMessage);
   await appendBackendEvent(sendingMessage);
 
   try {
-    const result = await sendDiscordPresenceUpdate(payload);
+    const result = payload.backendUrl
+      ? await sendPresenceToBackend(payload)
+      : await sendDiscordPresenceUpdate(payload);
     updateDiscordStatus(result, {
       checkedAt: new Date().toISOString(),
-      successMessage: `Last Discord update delivered for ${payload.projectName}.`,
-      errorPrefix: "Discord delivery failed"
+      successMessage: `Last presence update delivered for ${payload.projectName}.`,
+      errorPrefix: "Presence delivery failed"
     });
     const resultMessage = result.delivered
-      ? `[discord] delivered ${payload.projectName}`
-      : `[discord] skipped ${payload.projectName} (${result.reason ?? "Unknown reason"})`;
+      ? `[${deliveryTarget}] delivered ${payload.projectName}`
+      : `[${deliveryTarget}] skipped ${payload.projectName} (${result.reason ?? "Unknown reason"})`;
 
     console.log(resultMessage);
     await appendBackendEvent(resultMessage);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown Discord send error";
+    const message = error instanceof Error ? error.message : "Unknown presence send error";
     updateDiscordStatus(
       {
         delivered: false,
@@ -546,10 +594,10 @@ async function deliverPresenceUpdate(payload: {
       {
         checkedAt: new Date().toISOString(),
         successMessage: "",
-        errorPrefix: "Discord delivery failed"
+        errorPrefix: "Presence delivery failed"
       }
     );
-    const resultMessage = `[discord] error ${payload.projectName} (${message})`;
+    const resultMessage = `[${deliveryTarget}] error ${payload.projectName} (${message})`;
     console.error(resultMessage);
     await appendBackendEvent(resultMessage);
   }

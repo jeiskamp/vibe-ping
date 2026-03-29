@@ -1,5 +1,6 @@
 export type WatcherConfig = {
   username: string;
+  backendUrl: string;
   webhookUrl: string;
   watchedFolders: string[];
   timeoutMinutes: number;
@@ -10,6 +11,7 @@ export type WatcherConfig = {
 
 export const DEFAULT_WATCHER_CONFIG: WatcherConfig = {
   username: "anonomous0123",
+  backendUrl: "",
   webhookUrl: "",
   watchedFolders: [],
   timeoutMinutes: 30,
