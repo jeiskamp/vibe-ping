@@ -1,0 +1,68 @@
+name: Notarization Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mac-notarize:
+    name: macOS Signing and Notarization Check
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Validate notarization secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -z "${CSC_LINK:-}" ]] && missing+=("CSC_LINK")
+          [[ -z "${CSC_KEY_PASSWORD:-}" ]] && missing+=("CSC_KEY_PASSWORD")
+          [[ -z "${APPLE_ID:-}" ]] && missing+=("APPLE_ID")
+          [[ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]] && missing+=("APPLE_APP_SPECIFIC_PASSWORD")
+          [[ -z "${APPLE_TEAM_ID:-}" ]] && missing+=("APPLE_TEAM_ID")
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "Missing required notarization secrets: ${missing[*]}"
+            exit 1
+          fi
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build notarized mac package
+        run: pnpm package:watcher
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          VIBEPING_REQUIRE_NOTARIZATION: "1"
+
+      - name: Upload notarization artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: notarization-preflight-macos
+          path: apps/watcher/release/**
+          if-no-files-found: error

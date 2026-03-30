@@ -32,8 +32,13 @@ export async function loadWatcherConfig(): Promise<WatcherConfig> {
 
 export async function saveWatcherConfig(config: WatcherConfig): Promise<void> {
   const configPath = getConfigPath();
+  const persistedConfig: WatcherConfig = {
+    ...config,
+    // Webhook secret is persisted in secure-webhook-store.
+    webhookUrl: ""
+  };
   await mkdir(path.dirname(configPath), { recursive: true });
-  await writeFile(configPath, JSON.stringify(config, null, 2), "utf8");
+  await writeFile(configPath, JSON.stringify(persistedConfig, null, 2), "utf8");
 }
 
 export function normalizeWatcherConfig(value: unknown): WatcherConfig {

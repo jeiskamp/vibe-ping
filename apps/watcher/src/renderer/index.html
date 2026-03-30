@@ -193,11 +193,39 @@
           <div class="panel__header">
             <div>
               <p class="panel__eyebrow">Recent activity</p>
-              <h2>Latest events</h2>
+              <h2>Recent file edits</h2>
             </div>
           </div>
 
-          <ul id="activity-list" class="activity-list" aria-label="Recent activity"></ul>
+          <ul id="activity-list" class="activity-list" aria-label="Recent file edits"></ul>
+        </section>
+
+        <section class="panel panel--diagnostics">
+          <div class="panel__header">
+            <div>
+              <p class="panel__eyebrow">Diagnostics</p>
+              <h2>Watcher state</h2>
+            </div>
+          </div>
+
+          <div class="diagnostics-grid" aria-live="polite">
+            <article class="diagnostic-card">
+              <span class="diagnostic-card__label">Effective presence</span>
+              <strong id="diagnostic-presence">Offline</strong>
+            </article>
+            <article class="diagnostic-card">
+              <span class="diagnostic-card__label">Last scan</span>
+              <strong id="diagnostic-last-scan">Not scanned yet</strong>
+            </article>
+            <article class="diagnostic-card">
+              <span class="diagnostic-card__label">Watched folders</span>
+              <strong id="diagnostic-folder-count">0</strong>
+            </article>
+            <article class="diagnostic-card">
+              <span class="diagnostic-card__label">Needs review</span>
+              <strong id="diagnostic-needs-review">0</strong>
+            </article>
+          </div>
         </section>
       </main>
 
@@ -206,6 +234,6 @@
       </footer>
     </div>
 
-    <script type="module" src="../../dist/renderer/renderer.js"></script>
+    <script type="module" src="./renderer.js"></script>
   </body>
 </html>

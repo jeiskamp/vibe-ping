@@ -23,6 +23,7 @@ import {
   sendDiscordWebhookMessage,
   type DiscordDeliveryResult
 } from "./services/discord-webhook.js";
+import { evaluatePresenceTransitionDecision } from "./services/presence-transitions.js";
 import { sendPresenceToBackend } from "./services/presence-backend.js";
 import {
   appendBackendEvent,
@@ -30,6 +31,10 @@ import {
   appendStatusSnapshot,
   initializeLocalNotifier
 } from "./services/local-notifier.js";
+import {
+  loadWebhookUrlFromSecureStore,
+  saveWebhookUrlToSecureStore
+} from "./services/secure-webhook-store.js";
 import type { WatcherConfig } from "./types/config.js";
 import type { PresenceState } from "./types/activity.js";
 
@@ -54,13 +59,6 @@ let currentConfig: WatcherConfig;
 let presenceStateByPath = new Map<string, PresenceState>();
 let aggregatePresenceState: PresenceState | undefined;
 let announcedActiveFolderPath: string | null = null;
-let presenceEvents: Array<{
-  id: string;
-  title: string;
-  detail: string;
-  time: string;
-  timestamp: number;
-}> = [];
 let latestSnapshot: {
   folders: Array<{
     path: string;
@@ -74,6 +72,12 @@ let latestSnapshot: {
     message: string;
     checkedAt: string | null;
     lastDeliveredAt: string | null;
+  };
+  diagnostics: {
+    lastScanAt: string | null;
+    effectivePresence: PresenceState;
+    watchedFolderCount: number;
+    foldersNeedingReview: number;
   };
   activity: Array<{
     id: string;
@@ -90,6 +94,12 @@ let latestSnapshot: {
     message: "Discord delivery is not configured yet.",
     checkedAt: null,
     lastDeliveredAt: null
+  },
+  diagnostics: {
+    lastScanAt: null,
+    effectivePresence: "Offline",
+    watchedFolderCount: 0,
+    foldersNeedingReview: 0
   },
   activity: []
 };
@@ -114,10 +124,38 @@ ipcMain.handle("watcher:select-folders", async (event) => {
 ipcMain.handle("watcher:get-config", async () => ({ ...currentConfig }));
 
 ipcMain.handle("watcher:update-config", async (_event, nextConfig: Partial<WatcherConfig>) => {
+  const includesWebhookUrl = Object.prototype.hasOwnProperty.call(nextConfig, "webhookUrl");
+  const nextWebhookUrl =
+    includesWebhookUrl && typeof nextConfig.webhookUrl === "string"
+      ? nextConfig.webhookUrl.trim()
+      : "";
+
+  if (includesWebhookUrl) {
+    const secureStoreResult = await saveWebhookUrlToSecureStore(nextWebhookUrl);
+
+    if (!secureStoreResult.persisted && nextWebhookUrl) {
+      const checkedAt = new Date().toISOString();
+      const warning =
+        secureStoreResult.reason ?? "Secure storage is unavailable, so the webhook is session-only.";
+
+      latestSnapshot.discord = {
+        ...latestSnapshot.discord,
+        configured: true,
+        status: "error",
+        message: `Webhook will only be available this session. ${warning}`,
+        checkedAt
+      };
+      await appendBackendEvent(`[secure-store] ${warning}`);
+    }
+  }
+
   currentConfig = normalizeWatcherConfig({
     ...currentConfig,
     ...nextConfig
   });
+  if (includesWebhookUrl) {
+    currentConfig.webhookUrl = nextWebhookUrl;
+  }
   currentConfig.timeoutMinutes = Math.min(
     maximumTimeoutMinutes,
     Math.max(minimumTimeoutMinutes, currentConfig.timeoutMinutes)
@@ -161,21 +199,31 @@ ipcMain.handle("watcher:open-official-server", async () => {
 
 ipcMain.handle("watcher:test-discord-connection", async () => {
   const checkedAt = new Date().toISOString();
-  const result = currentConfig.backendUrl
-    ? await sendPresenceToBackend({
-        username: currentConfig.username,
-        projectName: "VibePing",
-        folderPath: "connection-test",
-        status: "Currently vibe coding",
-        timestamp: checkedAt,
-        languageTag: "Connection test",
-        webhookUrl: currentConfig.webhookUrl || undefined,
-        backendUrl: currentConfig.backendUrl
-      })
-    : await sendDiscordWebhookMessage({
-        webhookUrl: currentConfig.webhookUrl || undefined,
-        content: `VibePing test message from @${currentConfig.username}. Discord connection looks good.`
-      });
+  let result: DiscordDeliveryResult;
+
+  try {
+    result = currentConfig.backendUrl
+      ? await sendPresenceToBackend({
+          username: currentConfig.username,
+          projectName: "VibePing",
+          folderPath: "connection-test",
+          status: "Currently vibe coding",
+          timestamp: checkedAt,
+          languageTag: "Connection test",
+          webhookUrl: currentConfig.webhookUrl || undefined,
+          backendUrl: currentConfig.backendUrl
+        })
+      : await sendDiscordWebhookMessage({
+          webhookUrl: currentConfig.webhookUrl || undefined,
+          content: `VibePing test message from @${currentConfig.username}. Discord connection looks good.`
+        });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown connection test error";
+    result = {
+      delivered: false,
+      reason: message
+    };
+  }
 
   updateDiscordStatus(result, {
     checkedAt,
@@ -216,7 +264,7 @@ function createMainWindow(showOnCreate = true): BrowserWindow {
     }
   });
 
-  window.loadFile(path.join(__dirname, "../src/renderer/index.html"));
+  window.loadFile(path.join(__dirname, "renderer/index.html"));
 
   window.on("close", (event) => {
     if (!isQuitting && currentConfig.keepRunningInBackground) {
@@ -392,6 +440,39 @@ function updateConfiguredDiscordState(): void {
   };
 }
 
+async function hydrateWebhookConfig(): Promise<void> {
+  const legacyWebhookUrl = currentConfig.webhookUrl.trim();
+
+  if (legacyWebhookUrl) {
+    const migrationResult = await saveWebhookUrlToSecureStore(legacyWebhookUrl);
+    if (!migrationResult.persisted) {
+      const reason = migrationResult.reason ?? "Legacy webhook migration failed.";
+      await appendBackendEvent(`[secure-store] ${reason}`);
+    }
+  }
+
+  const secureStoreResult = await loadWebhookUrlFromSecureStore();
+  const runtimeWebhookUrl = secureStoreResult.webhookUrl || legacyWebhookUrl;
+  currentConfig.webhookUrl = runtimeWebhookUrl;
+  await saveWatcherConfig(currentConfig);
+
+  if (!secureStoreResult.persisted && runtimeWebhookUrl) {
+    const checkedAt = new Date().toISOString();
+    const warning =
+      secureStoreResult.reason ??
+      "Secure storage is unavailable, so the webhook is only available in this session.";
+
+    latestSnapshot.discord = {
+      ...latestSnapshot.discord,
+      configured: true,
+      status: "error",
+      message: `Webhook will only be available this session. ${warning}`,
+      checkedAt
+    };
+    await appendBackendEvent(`[secure-store] ${warning}`);
+  }
+}
+
 function updateDiscordStatus(
   result: DiscordDeliveryResult,
   options: {
@@ -484,16 +565,6 @@ async function deriveSnapshot(snapshot: {
         nextPresence === "Currently vibe coding"
           ? formatActivePresenceMessage(currentConfig.username, folderName, folder.languageTag)
           : `${currentConfig.username} is offline ${folderName}`;
-
-      const event = {
-        id: `${folder.path}-${now}-${nextPresence}`,
-        title: message,
-        detail: folder.path,
-        time: "just now",
-        timestamp: now
-      };
-
-      presenceEvents = [event, ...presenceEvents].slice(0, 12);
       console.log(`[VibePing] ${message}`);
       await appendPresenceEvent(`[presence] ${message}`);
       if (nextPresence === "Currently vibe coding") {
@@ -503,15 +574,6 @@ async function deriveSnapshot(snapshot: {
 
     if (shouldNotifyIdle) {
       const idleMessage = `${currentConfig.username} has been idle in ${folderName} for ${currentConfig.timeoutMinutes} minutes`;
-      const event = {
-        id: `${folder.path}-${now}-idle-notification`,
-        title: idleMessage,
-        detail: folder.path,
-        time: "just now",
-        timestamp: now
-      };
-
-      presenceEvents = [event, ...presenceEvents].slice(0, 12);
       console.log(`[VibePing] ${idleMessage}`);
       await appendPresenceEvent(`[idle] ${idleMessage}`);
       showIdleNotification(folderName, currentConfig.timeoutMinutes);
@@ -524,15 +586,6 @@ async function deriveSnapshot(snapshot: {
           folderName,
           folder.languageTag
         );
-        const event = {
-          id: `${folder.path}-${now}-initial-active`,
-          title: messageWithLanguage,
-          detail: folder.path,
-          time: "just now",
-          timestamp: now
-        };
-
-        presenceEvents = [event, ...presenceEvents].slice(0, 12);
         console.log(`[VibePing] ${messageWithLanguage}`);
         await appendPresenceEvent(`[presence] ${messageWithLanguage}`);
         loggedActivePresencePaths.add(folder.path);
@@ -542,22 +595,16 @@ async function deriveSnapshot(snapshot: {
     presenceStateByPath.set(folder.path, nextPresence);
   }
 
-  const nextAggregatePresence: PresenceState = snapshot.folders.some(
-    (folder) => folder.status === "Watching"
-  )
-    ? "Currently vibe coding"
-    : "Offline";
-  const shouldSendActivePresence =
-    Boolean(activeProjectName) &&
-    nextAggregatePresence === "Currently vibe coding" &&
-    (aggregatePresenceState !== "Currently vibe coding" ||
-      announcedActiveFolderPath !== activeFolderPath);
-  const shouldLogProjectSwitch =
-    Boolean(activeProjectName) &&
-    nextAggregatePresence === "Currently vibe coding" &&
-    aggregatePresenceState === "Currently vibe coding" &&
-    announcedActiveFolderPath !== null &&
-    announcedActiveFolderPath !== activeFolderPath;
+  const transitionDecision = evaluatePresenceTransitionDecision({
+    folders: snapshot.folders,
+    activeProjectName,
+    activeFolderPath,
+    previousAggregatePresence: aggregatePresenceState,
+    previouslyAnnouncedActiveFolderPath: announcedActiveFolderPath
+  });
+  const nextAggregatePresence = transitionDecision.nextAggregatePresence;
+  const shouldSendActivePresence = transitionDecision.shouldSendActivePresence;
+  const shouldLogProjectSwitch = transitionDecision.shouldLogProjectSwitch;
 
   if (
     shouldLogProjectSwitch &&
@@ -570,15 +617,6 @@ async function deriveSnapshot(snapshot: {
       activeProjectName,
       activeLanguageTag
     );
-    const event = {
-      id: `${activeFolderPath}-${now}-project-switch`,
-      title: message,
-      detail: activeFolderPath,
-      time: "just now",
-      timestamp: now
-    };
-
-    presenceEvents = [event, ...presenceEvents].slice(0, 12);
     console.log(`[VibePing] ${message}`);
     await appendPresenceEvent(`[presence] ${message}`);
   }
@@ -597,11 +635,7 @@ async function deriveSnapshot(snapshot: {
     announcedActiveFolderPath = activeFolderPath;
   }
 
-  if (
-    snapshot.folders.length > 0 &&
-    nextAggregatePresence === "Offline" &&
-    aggregatePresenceState === "Currently vibe coding"
-  ) {
+  if (transitionDecision.shouldSendOfflinePresence) {
     await deliverPresenceUpdate({
       username: currentConfig.username,
       projectName: activeProjectName ?? path.basename(currentConfig.watchedFolders[0] ?? "workspace"),
@@ -615,14 +649,19 @@ async function deriveSnapshot(snapshot: {
   }
 
   aggregatePresenceState = nextAggregatePresence;
+  const foldersNeedingReview = snapshot.folders.filter((folder) => folder.status === "Needs review").length;
   await appendStatusSnapshot(currentConfig.username, snapshot.folders);
 
   return {
     folders: snapshot.folders,
     discord: latestSnapshot.discord,
-    activity: [...presenceEvents, ...snapshot.activity]
-      .sort((left, right) => right.timestamp - left.timestamp)
-      .slice(0, 8)
+    diagnostics: {
+      lastScanAt: new Date(now).toISOString(),
+      effectivePresence: nextAggregatePresence,
+      watchedFolderCount: snapshot.folders.length,
+      foldersNeedingReview
+    },
+    activity: snapshot.activity
   };
 }
 
@@ -710,6 +749,7 @@ app.whenReady().then(async () => {
   if (!currentConfig.openAtLogin) {
     currentConfig.startHidden = false;
   }
+  await hydrateWebhookConfig();
   updateConfiguredDiscordState();
   syncPresenceTracking();
   await initializeLocalNotifier({ openTerminal: shouldOpenNotifierTerminal });

@@ -43,6 +43,12 @@ declare global {
           checkedAt: string | null;
           lastDeliveredAt: string | null;
         };
+        diagnostics: {
+          lastScanAt: string | null;
+          effectivePresence: "Currently vibe coding" | "Offline";
+          watchedFolderCount: number;
+          foldersNeedingReview: number;
+        };
         activity: Array<ActivityItem & { timestamp: number }>;
       }>;
     };

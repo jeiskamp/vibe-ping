@@ -88,11 +88,34 @@ Typecheck everything:
 pnpm typecheck
 ```
 
+Run watcher unit tests:
+
+```bash
+pnpm test:watcher:unit
+```
+
 Build everything:
 
 ```bash
 pnpm build
 ```
+
+Build platform packages for the watcher app:
+
+```bash
+pnpm package:watcher
+```
+
+Run cross-platform-friendly package smoke checks locally:
+
+```bash
+pnpm package:watcher:smoke
+```
+
+Release publishing details for tag-driven draft releases:
+
+- [docs/release-publishing.md](./docs/release-publishing.md)
+- [docs/notarization-setup.md](./docs/notarization-setup.md)
 
 ## How It Works
 
@@ -110,3 +133,4 @@ The monitoring loop lives in Electron’s main process, so the app can keep runn
 - Closing the window can keep Vibe-Ping running in the background.
 - Quitting is handled explicitly from the tray menu.
 - Discord webhooks are sensitive credentials. Keep them private.
+- Webhook secrets are stored using OS-backed secure storage when available.

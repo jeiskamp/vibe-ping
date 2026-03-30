@@ -41,18 +41,25 @@ export async function sendDiscordWebhookMessage(payload: {
     };
   }
 
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({ content: payload.content })
-  });
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ content: payload.content })
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return {
+        delivered: false,
+        reason: `Discord webhook returned ${response.status}`
+      };
+    }
+  } catch (error) {
     return {
       delivered: false,
-      reason: `Discord webhook returned ${response.status}`
+      reason: error instanceof Error ? error.message : "Unable to reach Discord webhook"
     };
   }
 

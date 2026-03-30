@@ -44,6 +44,12 @@ contextBridge.exposeInMainWorld("vibePingDesktop", {
         checkedAt: string | null;
         lastDeliveredAt: string | null;
       };
+      diagnostics: {
+        lastScanAt: string | null;
+        effectivePresence: "Currently vibe coding" | "Offline";
+        watchedFolderCount: number;
+        foldersNeedingReview: number;
+      };
       activity: Array<{
         id: string;
         title: string;

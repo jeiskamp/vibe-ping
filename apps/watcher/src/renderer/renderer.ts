@@ -33,6 +33,10 @@ const officialServerButton = requireElement<HTMLButtonElement>("#official-server
 const testWebhookButton = requireElement<HTMLButtonElement>("#test-webhook-button");
 const discordStatusMessage = requireElement<HTMLElement>("#discord-status-message");
 const discordStatusMeta = requireElement<HTMLElement>("#discord-status-meta");
+const diagnosticPresence = requireElement<HTMLElement>("#diagnostic-presence");
+const diagnosticLastScan = requireElement<HTMLElement>("#diagnostic-last-scan");
+const diagnosticFolderCount = requireElement<HTMLElement>("#diagnostic-folder-count");
+const diagnosticNeedsReview = requireElement<HTMLElement>("#diagnostic-needs-review");
 const keepRunningCheckbox = requireElement<HTMLInputElement>("#keep-running-checkbox");
 const openAtLoginCheckbox = requireElement<HTMLInputElement>("#open-at-login-checkbox");
 const startHiddenCheckbox = requireElement<HTMLInputElement>("#start-hidden-checkbox");
@@ -165,6 +169,18 @@ function renderDiscordStatus(discord: {
   discordStatusMeta.textContent = `${checkedLabel} • ${deliveredLabel}`;
 }
 
+function renderDiagnostics(diagnostics: {
+  lastScanAt: string | null;
+  effectivePresence: PresenceState;
+  watchedFolderCount: number;
+  foldersNeedingReview: number;
+}): void {
+  diagnosticPresence.textContent = diagnostics.effectivePresence;
+  diagnosticLastScan.textContent = formatTimestamp(diagnostics.lastScanAt);
+  diagnosticFolderCount.textContent = String(diagnostics.watchedFolderCount);
+  diagnosticNeedsReview.textContent = String(diagnostics.foldersNeedingReview);
+}
+
 function applyConfigToInputs(): void {
   usernameInput.value = config.username;
   usernameDisplay.textContent = `@${config.username}`;
@@ -285,8 +301,8 @@ function renderActivity(): void {
   if (activityItems.length === 0) {
     const emptyState = document.createElement("li");
     const emptyDetail = config.watchedFolders.length
-      ? "VibePing is running quietly in the background. Your latest events will show up here."
-      : "No recent activity yet.";
+      ? "Recent file edits from your watched folders will show up here."
+      : "No recent file edits yet.";
 
     emptyState.className = "activity-item";
     emptyState.textContent = emptyDetail;
@@ -333,6 +349,7 @@ async function refreshState(): Promise<void> {
   activityItems = snapshot.activity.map(({ timestamp: _timestamp, ...activity }) => activity);
 
   renderDiscordStatus(snapshot.discord);
+  renderDiagnostics(snapshot.diagnostics);
   renderFolders();
   renderActivity();
 }
@@ -409,6 +426,9 @@ async function testDiscordConnection(): Promise<void> {
       result.message
     );
     await refreshState();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Discord connection error";
+    setStatus("Discord connection failed", message);
   } finally {
     testWebhookButton.textContent = "Test connection";
     testWebhookButton.disabled = !hasDeliveryTarget(config);

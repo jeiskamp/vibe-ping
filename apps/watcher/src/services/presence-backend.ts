@@ -28,26 +28,33 @@ export async function sendPresenceToBackend(
     };
   }
 
-  const response = await fetch(backendUrl, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify({
-      username: payload.username,
-      projectName: payload.projectName,
-      folderPath: payload.folderPath,
-      status: payload.status,
-      timestamp: payload.timestamp,
-      languageTag: payload.languageTag,
-      webhookUrl: payload.webhookUrl
-    })
-  });
+  try {
+    const response = await fetch(backendUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        username: payload.username,
+        projectName: payload.projectName,
+        folderPath: payload.folderPath,
+        status: payload.status,
+        timestamp: payload.timestamp,
+        languageTag: payload.languageTag,
+        webhookUrl: payload.webhookUrl
+      })
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return {
+        delivered: false,
+        reason: `VibePing backend returned ${response.status}`
+      };
+    }
+  } catch (error) {
     return {
       delivered: false,
-      reason: `VibePing backend returned ${response.status}`
+      reason: error instanceof Error ? error.message : "Unable to reach VibePing backend"
     };
   }
 

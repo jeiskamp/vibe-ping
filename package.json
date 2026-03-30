@@ -2,10 +2,18 @@
   "name": "vibeping",
   "private": true,
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/justincoolio/vibe-ping.git"
+  },
   "packageManager": "pnpm@10.6.0",
   "scripts": {
     "build": "pnpm -r run build",
+    "package:watcher": "pnpm --filter @vibeping/watcher package",
+    "package:watcher:dir": "pnpm --filter @vibeping/watcher package:dir",
+    "package:watcher:smoke": "pnpm --filter @vibeping/watcher release:smoke",
     "test:backend": "pnpm --filter @vibeping/backend start",
+    "test:watcher:unit": "pnpm --filter @vibeping/watcher test",
     "test:watcher": "pnpm --filter @vibeping/watcher start",
     "test:app": "pnpm --filter @vibeping/watcher start",
     "typecheck": "pnpm -r run typecheck"
